@@ -1,5 +1,5 @@
 'use client'
-import Image from'next/image';import{useMemo,useRef,useState}from'react';import{Heart,Minus,Plus,Star,Truck,ShieldCheck,RefreshCcw}from'lucide-react';import{Product,formatINR}from'@/data/products';import{useCartStore}from'@/store/cartStore';import{useWishlistStore}from'@/store/wishlistStore';
+import Image from'next/image';import{useEffect,useMemo,useRef,useState}from'react';import{Check,Heart,Minus,Plus,ShoppingBag,Star,Truck,ShieldCheck,RefreshCcw}from'lucide-react';import{Product,formatINR}from'@/data/products';import{useCartStore}from'@/store/cartStore';import{useWishlistStore}from'@/store/wishlistStore';import{FLY_TO_CART_MS,flyImageToCart,prefersReducedMotion}from'@/lib/flyToCart';
 
 type Media={type:'image'|'video';src:string}
 
@@ -39,7 +39,7 @@ function Gallery({product}:{product:Product}){
         // grid never leaves an orphaned empty half column.
         const wide=i===0||m.type==='video'||(i===lastImage&&secondaryImages%2===1)
         const tall=wide&&m.type==='image'
-        return <div key={`${m.src}-${i}`}
+        return <div key={`${m.src}-${i}`} data-active={active===i}
           className={`relative aspect-[4/5] w-full shrink-0 snap-center overflow-hidden ${m.type==='video'?'bg-black lg:max-h-[720px]':'bg-cream'} ${wide?'lg:col-span-2':''} ${tall?'lg:aspect-[4/3]':''}`}>
           {m.type==='image'
             ?<Image src={m.src} alt={`${product.name} view ${i+1}`} fill priority={i===0} className="object-cover"
@@ -59,4 +59,49 @@ function Gallery({product}:{product:Product}){
   </div>
 }
 
-export default function ProductDetail({product}:{product:Product}){const[size,setSize]=useState(product.sizes[0]);const[q,setQ]=useState(1);const add=useCartStore(s=>s.addItem);const liked=useWishlistStore(s=>s.ids.includes(product.id));const toggle=useWishlistStore(s=>s.toggle);return <div className="container-lux py-8 md:py-14"><div className="grid gap-10 lg:grid-cols-[1.15fr_.85fr] lg:gap-16"><Gallery product={product}/><div className="lg:sticky lg:top-28 lg:h-fit"><p className="eyebrow">{product.category} · {product.purity} {product.metal}</p><h1 className="display mt-4 text-5xl md:text-6xl">{product.name}</h1><div className="mt-4 flex items-center gap-3"><div className="flex text-gold">{[1,2,3,4,5].map(i=><Star key={i} size={13} fill="currentColor"/>)}</div><span className="text-xs text-black/45">{product.rating} · {product.reviews} reviews</span></div><p className="mt-7 text-xl">{formatINR(product.price)} {product.compareAt&&<del className="ml-2 text-base text-black/30">{formatINR(product.compareAt)}</del>}</p><p className="mt-2 text-[10px] text-black/45">Inclusive of all taxes</p><p className="mt-7 leading-7 text-black/55">{product.description}</p><div className="mt-8 border-t pt-7"><div className="mb-3 flex items-center justify-between"><span className="text-[10px] font-semibold uppercase tracking-[.14em]">Select size</span><button className="text-[10px] underline">Size guide</button></div><div className="flex flex-wrap gap-2">{product.sizes.map(s=><button onClick={()=>setSize(s)} key={s} className={`min-w-12 border px-4 py-3 text-xs ${size===s?'border-forest bg-forest text-white':'border-black/15 hover:border-black'}`}>{s}</button>)}</div></div><div className="mt-7 flex flex-wrap gap-3"><div className="flex items-center border border-black/15"><button onClick={()=>setQ(Math.max(1,q-1))} className="p-4"><Minus size={14}/></button><span className="w-7 text-center text-sm">{q}</span><button onClick={()=>setQ(Math.min(product.stock,q+1))} className="p-4"><Plus size={14}/></button></div><button onClick={()=>add({productId:product.id,slug:product.slug,name:product.name,image:product.image,price:product.price,size,quantity:q,maxStock:product.stock})} className="btn-primary order-3 w-full sm:order-none sm:w-auto sm:flex-1">Add to bag</button><button onClick={()=>toggle(product.id)} className="flex w-14 items-center justify-center border border-black/15" aria-label="Wishlist"><Heart size={19} fill={liked?'#173b2c':'none'}/></button></div><button onClick={()=>{add({productId:product.id,slug:product.slug,name:product.name,image:product.image,price:product.price,size,quantity:q,maxStock:product.stock});location.href='/checkout'}} className="btn-outline mt-3 w-full">Buy it now</button><div className="mt-8 grid grid-cols-3 border-y py-5">{[[ShieldCheck,'Hallmarked'],[Truck,'Insured delivery'],[RefreshCcw,'7-day support']].map(([Icon,t]:any)=><div key={t} className="flex flex-col items-center gap-2 text-center text-[9px] uppercase tracking-[.1em] text-black/55"><Icon size={19} strokeWidth={1.3} className="text-gold"/>{t}</div>)}</div><details className="border-b py-5"><summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[.14em]">Materials &amp; craftsmanship</summary><p className="pt-4 text-sm leading-6 text-black/55">Hand-finished in Surat using responsibly sourced precious metal. Each piece is quality checked and hallmarked before dispatch.</p></details><details className="border-b py-5"><summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[.14em]">Shipping &amp; returns</summary><p className="pt-4 text-sm leading-6 text-black/55">Complimentary insured shipping above ₹5,000. Contact client care within 7 days for return assistance.</p></details></div></div></div>}
+export default function ProductDetail({product}:{product:Product}){
+const[size,setSize]=useState(product.sizes[0]);const[q,setQ]=useState(1);
+const add=useCartStore(s=>s.addItem);const openCart=useCartStore(s=>s.openCart);
+const liked=useWishlistStore(s=>s.ids.includes(product.id));const toggle=useWishlistStore(s=>s.toggle);
+
+// --- Add-to-bag micro-interaction state ---
+// `added` drives the "Added ✓" button state; `addingRef` is the synchronous
+// guard that swallows rapid double clicks (a second click within the window is
+// ignored entirely, so the item is never added twice).
+const galleryRef=useRef<HTMLDivElement>(null)
+const addingRef=useRef(false)
+const timers=useRef<number[]>([])
+const[added,setAdded]=useState(false)
+const later=(fn:()=>void,ms:number)=>{timers.current.push(window.setTimeout(fn,ms))}
+// Never fire the delayed drawer-open / button reset after navigating away.
+useEffect(()=>()=>{timers.current.forEach(t=>window.clearTimeout(t))},[])
+
+function activeImageEl():HTMLImageElement|null{
+  const root=galleryRef.current
+  if(!root)return null
+  // The swipeable gallery marks the visible slide with [data-active]; fall back
+  // to the hero image when the active slide is a video (no <img> inside).
+  const active=root.querySelector<HTMLElement>('[data-active="true"]')
+  const img=(active&&active.querySelector('img'))||root.querySelector('img')
+  return img instanceof HTMLImageElement?img:null
+}
+
+function onAddToBag(){
+  if(addingRef.current)return
+  addingRef.current=true
+  setAdded(true)
+  // Cart logic itself is untouched: size + quantity flow through the store as before.
+  add({productId:product.id,slug:product.slug,name:product.name,image:product.image,price:product.price,size,quantity:q,maxStock:product.stock},{openCart:false})
+  const reduced=prefersReducedMotion()
+  const img=activeImageEl()
+  const target=document.querySelector<HTMLElement>('[data-cart-button]')
+  if(!reduced&&img&&target){
+    flyImageToCart({sourceEl:img,imageUrl:img.currentSrc||img.src,targetEl:target})
+    later(openCart,FLY_TO_CART_MS+40) // drawer slides in just after the thumbnail lands
+  }else{
+    later(openCart,0) // reduced motion (or missing anchors): open immediately, no flight
+  }
+  later(()=>{setAdded(false);addingRef.current=false},reduced?900:1700)
+}
+
+return <div className="container-lux py-8 md:py-14"><div className="grid gap-10 lg:grid-cols-[1.15fr_.85fr] lg:gap-16"><div ref={galleryRef}><Gallery product={product}/></div><div className="lg:sticky lg:top-28 lg:h-fit"><p className="eyebrow">{product.category} · {product.purity} {product.metal}</p><h1 className="display mt-4 text-5xl md:text-6xl">{product.name}</h1><div className="mt-4 flex items-center gap-3"><div className="flex text-gold">{[1,2,3,4,5].map(i=><Star key={i} size={13} fill="currentColor"/>)}</div><span className="text-xs text-black/45">{product.rating} · {product.reviews} reviews</span></div><p className="mt-7 text-xl">{formatINR(product.price)} {product.compareAt&&<del className="ml-2 text-base text-black/30">{formatINR(product.compareAt)}</del>}</p><p className="mt-2 text-[10px] text-black/45">Inclusive of all taxes</p><p className="mt-7 leading-7 text-black/55">{product.description}</p><div className="mt-8 border-t pt-7"><div className="mb-3 flex items-center justify-between"><span className="text-[10px] font-semibold uppercase tracking-[.14em]">Select size</span><button className="text-[10px] underline">Size guide</button></div><div className="flex flex-wrap gap-2">{product.sizes.map(s=><button onClick={()=>setSize(s)} key={s} className={`min-w-12 border px-4 py-3 text-xs ${size===s?'border-forest bg-forest text-white':'border-black/15 hover:border-black'}`}>{s}</button>)}</div></div><div className="mt-7 flex flex-wrap gap-3"><div className="flex items-center border border-black/15"><button onClick={()=>setQ(Math.max(1,q-1))} className="p-4"><Minus size={14}/></button><span className="w-7 text-center text-sm">{q}</span><button onClick={()=>setQ(Math.min(product.stock,q+1))} className="p-4"><Plus size={14}/></button></div><button onClick={onAddToBag} disabled={added} aria-label={added?`${product.name} added to bag`:'Add to bag'} className={`btn-primary order-3 w-full sm:order-none sm:w-auto sm:flex-1 ${added?'added':''}`}>{added?<><Check size={15} className="animate-pop-in"/>Added</>:<><ShoppingBag size={15}/>Add to bag</>}</button><span role="status" aria-live="polite" className="sr-only">{added?'Added to bag':""}</span><button onClick={()=>toggle(product.id)} className="flex w-14 items-center justify-center border border-black/15" aria-label="Wishlist"><Heart size={19} fill={liked?'#173b2c':'none'}/></button></div><button onClick={()=>{add({productId:product.id,slug:product.slug,name:product.name,image:product.image,price:product.price,size,quantity:q,maxStock:product.stock});location.href='/checkout'}} className="btn-outline mt-3 w-full">Buy it now</button><div className="mt-8 grid grid-cols-3 border-y py-5">{[[ShieldCheck,'Hallmarked'],[Truck,'Insured delivery'],[RefreshCcw,'7-day support']].map(([Icon,t]:any)=><div key={t} className="flex flex-col items-center gap-2 text-center text-[9px] uppercase tracking-[.1em] text-black/55"><Icon size={19} strokeWidth={1.3} className="text-gold"/>{t}</div>)}</div><details className="border-b py-5"><summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[.14em]">Materials &amp; craftsmanship</summary><p className="pt-4 text-sm leading-6 text-black/55">Hand-finished in Surat using responsibly sourced precious metal. Each piece is quality checked and hallmarked before dispatch.</p></details><details className="border-b py-5"><summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[.14em]">Shipping &amp; returns</summary><p className="pt-4 text-sm leading-6 text-black/55">Complimentary insured shipping above ₹5,000. Contact client care within 7 days for return assistance.</p></details></div></div></div>}
