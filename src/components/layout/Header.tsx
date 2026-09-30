@@ -1,5 +1,5 @@
 'use client'
-import Link from 'next/link';import Image from 'next/image';import{usePathname}from'next/navigation';import{useEffect,useState}from'react';import{Menu,X,Search,UserRound,Heart,ShoppingBag,ChevronDown}from'lucide-react';import{useCartStore}from'@/store/cartStore';import{useWishlistStore}from'@/store/wishlistStore';
+import Link from 'next/link';import Image from 'next/image';import{usePathname}from'next/navigation';import{useEffect,useRef,useState}from'react';import{Menu,X,Search,UserRound,Heart,ShoppingBag,ChevronDown}from'lucide-react';import{useCartStore}from'@/store/cartStore';import{useWishlistStore}from'@/store/wishlistStore';
 const links=[['Rings','/shop/rings'],['Earrings','/shop/earrings'],['Pendants','/shop/spiritual'],['Bracelets','/shop/bracelets'],['Collections','/collections']]
 function Logo({light=false}:{light?:boolean}){return <Link href="/" className="relative block h-[62px] w-[110px] shrink-0 sm:w-[122px]" aria-label="Niryana Jewels home"><Image src={light?'/media/brand/logo-light.png':'/media/brand/logo-full.png'} alt="Niryana Jewels" fill priority className="object-contain" sizes="122px"/></Link>}
 
@@ -15,6 +15,21 @@ export default function Header(){
   const wishIds=useWishlistStore(s=>s.ids.length)
   const wish=mounted?wishIds:0
   const count=mounted?items.reduce((n,i)=>n+i.quantity,0):0
+
+  // Badge pulse whenever an item lands in the bag (count goes up). The baseline
+  // is captured on the first client render so a persisted cart doesn't pulse on
+  // every page load. The animation itself is disabled for reduced-motion users
+  // via the media query in globals.css.
+  const[pulse,setPulse]=useState(false)
+  const prevCount=useRef<number|null>(null)
+  useEffect(()=>{
+    if(!mounted)return
+    if(prevCount.current===null||count<=prevCount.current){prevCount.current=count;return}
+    prevCount.current=count
+    setPulse(true)
+    const t=window.setTimeout(()=>setPulse(false),800)
+    return()=>window.clearTimeout(t)
+  },[count,mounted])
 
   useEffect(()=>setMounted(true),[])
   useEffect(()=>setMenu(false),[pathname])
@@ -40,7 +55,7 @@ export default function Header(){
           <Link href="/search" aria-label="Search"><Search size={19}/></Link>
           <Link href="/login" className="hidden sm:block" aria-label="Account"><UserRound size={19}/></Link>
           <Link href="/wishlist" className="relative" aria-label={wish>0?`Wishlist, ${wish} saved`:'Wishlist'}><Heart size={19}/>{wish>0&&<span className="absolute -right-2 -top-2 h-4 min-w-4 rounded-full bg-gold px-1 text-center text-[9px] leading-4 text-forest">{wish}</span>}</Link>
-          <button onClick={open} className="relative" aria-label={count>0?`Open cart, ${count} items`:'Open cart'}><ShoppingBag size={20}/>{count>0&&<span className="absolute -right-2 -top-2 h-4 min-w-4 rounded-full bg-forest px-1 text-center text-[9px] leading-4 text-white">{count}</span>}</button>
+          <button onClick={open} data-cart-button className="relative" aria-label={count>0?`Open cart, ${count} items`:'Open cart'}><ShoppingBag size={20}/>{count>0&&<span className={`absolute -right-2 -top-2 h-4 min-w-4 rounded-full bg-forest px-1 text-center text-[9px] leading-4 text-white ${pulse?'animate-badge-pulse':''}`}>{count}</span>}</button>
         </div>
       </div>
     </header>
