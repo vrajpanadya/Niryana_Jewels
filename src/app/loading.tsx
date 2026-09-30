@@ -1,0 +1,1 @@
+export default function Loading(){return <div className="container-lux py-24"><div className="h-4 w-24 animate-pulse bg-black/10"/><div className="mt-5 h-12 w-72 animate-pulse bg-black/10"/><div className="mt-12 grid grid-cols-2 gap-4 md:grid-cols-4">{[1,2,3,4].map(i=><div key={i} className="aspect-[4/5] animate-pulse bg-black/5"/>)}</div></div>}

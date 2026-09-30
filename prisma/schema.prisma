@@ -1,0 +1,315 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum MetalType {
+  GOLD
+  SILVER
+  PLATINUM
+  ROSE_GOLD
+  WHITE_GOLD
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+  REFUNDED
+  RETURNED
+}
+
+enum AddressType {
+  HOME
+  OFFICE
+  OTHER
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+model User { id String @id @default(cuid())
+name String?
+email String? @unique
+emailVerified DateTime?
+phone String? @unique
+image String? @db.Text
+password String?
+role Role @default(CUSTOMER)
+addresses Address[]
+orders Order[]
+reviews Review[]
+wishlist Wishlist[]
+cart Cart?
+accounts Account[]
+sessions Session[]
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+@@index([email])
+@@index([phone]) }
+model Account { id String @id @default(cuid())
+userId String
+type String
+provider String
+providerAccountId String
+refresh_token String? @db.Text
+access_token String? @db.Text
+expires_at Int?
+token_type String?
+scope String?
+id_token String? @db.Text
+session_state String?
+user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+@@unique([provider,providerAccountId])
+@@index([userId]) }
+model Session { id String @id @default(cuid())
+sessionToken String @unique
+userId String
+expires DateTime
+user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+@@index([userId]) }
+model VerificationToken { identifier String
+token String @unique
+expires DateTime
+@@unique([identifier,token]) }
+model Category { id String @id @default(cuid())
+name String
+slug String @unique
+description String? @db.Text
+image String? @db.Text
+parentId String?
+parent Category? @relation("SubCategories",fields:[parentId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+children Category[] @relation("SubCategories")
+products Product[]
+isActive Boolean @default(true)
+sortOrder Int @default(0)
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+@@index([parentId])
+@@index([slug]) }
+model Product { id String @id @default(cuid())
+name String
+slug String @unique
+description String @db.LongText
+shortDescription String? @db.Text
+sku String @unique
+price Decimal @db.Decimal(10,2)
+compareAtPrice Decimal? @db.Decimal(10,2)
+images ProductImage[]
+categoryId String
+category Category @relation(fields:[categoryId],references:[id])
+metalType MetalType?
+metalPurity String? @db.VarChar(20)
+grossWeight Decimal? @db.Decimal(8,3)
+stoneType String? @db.VarChar(50)
+size String? @db.VarChar(100)
+certification String? @db.VarChar(100)
+isActive Boolean @default(true)
+isFeatured Boolean @default(false)
+isNewArrival Boolean @default(false)
+isBestSeller Boolean @default(false)
+stock Int @default(0)
+tags String? @db.Text
+reviews Review[]
+wishlist Wishlist[]
+cartItems CartItem[]
+orderItems OrderItem[]
+collections CollectionProduct[]
+views Int @default(0)
+avgRating Decimal? @default(0) @db.Decimal(2,1)
+reviewCount Int @default(0)
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+@@index([categoryId])
+@@index([slug])
+@@index([isActive,isFeatured])
+@@index([price])
+@@fulltext([name,description]) }
+model ProductImage { id String @id @default(cuid())
+url String @db.Text
+alt String? @db.VarChar(255)
+sortOrder Int @default(0)
+productId String
+product Product @relation(fields:[productId],references:[id],onDelete:Cascade)
+@@index([productId]) }
+model Collection { id String @id @default(cuid())
+name String
+slug String @unique
+description String? @db.Text
+image String? @db.Text
+bannerImage String? @db.Text
+products CollectionProduct[]
+isActive Boolean @default(true)
+sortOrder Int @default(0)
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+@@index([slug]) }
+model CollectionProduct { id String @id @default(cuid())
+productId String
+collectionId String
+product Product @relation(fields:[productId],references:[id],onDelete:Cascade)
+collection Collection @relation(fields:[collectionId],references:[id],onDelete:Cascade)
+sortOrder Int @default(0)
+@@unique([productId,collectionId])
+@@index([productId])
+@@index([collectionId]) }
+model Cart { id String @id @default(cuid())
+userId String @unique
+user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+items CartItem[]
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt }
+model CartItem { id String @id @default(cuid())
+cartId String
+cart Cart @relation(fields:[cartId],references:[id],onDelete:Cascade)
+productId String
+product Product @relation(fields:[productId],references:[id])
+quantity Int @default(1)
+size String? @db.VarChar(20)
+@@unique([cartId,productId,size])
+@@index([cartId])
+@@index([productId]) }
+model Order { id String @id @default(cuid())
+orderNumber String @unique
+userId String
+user User @relation(fields:[userId],references:[id])
+items OrderItem[]
+status OrderStatus @default(PENDING)
+subtotal Decimal @db.Decimal(10,2)
+tax Decimal @db.Decimal(10,2)
+shippingCost Decimal @default(0) @db.Decimal(10,2)
+discount Decimal @default(0) @db.Decimal(10,2)
+total Decimal @db.Decimal(10,2)
+shippingAddress Json
+paymentMethod String? @db.VarChar(50)
+paymentId String? @db.VarChar(100)
+razorpayOrderId String? @db.VarChar(100)
+razorpaySignature String? @db.Text
+isPaid Boolean @default(false)
+paidAt DateTime?
+trackingNumber String? @db.VarChar(100)
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+@@index([userId])
+@@index([orderNumber])
+@@index([status])
+@@index([createdAt]) }
+model OrderItem { id String @id @default(cuid())
+orderId String
+order Order @relation(fields:[orderId],references:[id],onDelete:Cascade)
+productId String
+product Product @relation(fields:[productId],references:[id])
+name String
+image String? @db.Text
+price Decimal @db.Decimal(10,2)
+quantity Int
+size String? @db.VarChar(20)
+@@index([orderId])
+@@index([productId]) }
+model Review { id String @id @default(cuid())
+rating Int
+title String? @db.VarChar(255)
+comment String? @db.Text
+userId String
+user User @relation(fields:[userId],references:[id])
+productId String
+product Product @relation(fields:[productId],references:[id])
+isVerified Boolean @default(false)
+isApproved Boolean @default(false)
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+@@unique([userId,productId])
+@@index([userId])
+@@index([productId])
+@@index([rating]) }
+model Wishlist { id String @id @default(cuid())
+userId String
+user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+productId String
+product Product @relation(fields:[productId],references:[id],onDelete:Cascade)
+createdAt DateTime @default(now())
+@@unique([userId,productId])
+@@index([userId])
+@@index([productId]) }
+model Address { id String @id @default(cuid())
+userId String
+user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+fullName String @db.VarChar(100)
+phone String @db.VarChar(15)
+addressLine1 String @db.VarChar(255)
+city String @db.VarChar(50)
+state String @db.VarChar(50)
+pincode String @db.VarChar(10)
+country String @default("India") @db.VarChar(50)
+isDefault Boolean @default(false)
+type AddressType @default(HOME)
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+@@index([userId]) }
+model Newsletter { id String @id @default(cuid())
+email String @unique
+name String? @db.VarChar(100)
+isActive Boolean @default(true)
+source String? @db.VarChar(50)
+createdAt DateTime @default(now()) }
+model ContactInquiry { id String @id @default(cuid())
+name String @db.VarChar(100)
+email String @db.VarChar(100)
+phone String? @db.VarChar(15)
+subject String @db.VarChar(200)
+message String @db.Text
+isRead Boolean @default(false)
+isReplied Boolean @default(false)
+createdAt DateTime @default(now())
+@@index([isRead]) }
+model Coupon { id String @id @default(cuid())
+code String @unique @db.VarChar(50)
+description String? @db.Text
+discountType DiscountType
+discountValue Decimal @db.Decimal(10,2)
+minOrderValue Decimal? @db.Decimal(10,2)
+maxDiscount Decimal? @db.Decimal(10,2)
+usageLimit Int?
+usedCount Int @default(0)
+isActive Boolean @default(true)
+startDate DateTime
+endDate DateTime
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+@@index([code])
+@@index([isActive]) }
+model Banner { id String @id @default(cuid())
+title String @db.VarChar(200)
+subtitle String? @db.VarChar(300)
+imageUrl String @db.Text
+mobileImageUrl String? @db.Text
+videoUrl String? @db.Text
+linkUrl String? @db.Text
+buttonText String? @db.VarChar(50)
+position String @default("hero") @db.VarChar(30)
+sortOrder Int @default(0)
+isActive Boolean @default(true)
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+@@index([position,isActive]) }
+model SiteSetting { id String @id @default(cuid())
+key String @unique @db.VarChar(100)
+value String @db.LongText
+type String @default("string") @db.VarChar(20)
+@@index([key]) }
