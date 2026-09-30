@@ -4,9 +4,9 @@ import Image from'next/image';import{useMemo,useRef,useState}from'react';import{
 type Media={type:'image'|'video';src:string}
 
 /**
- * One DOM tree, two layouts: a snap-scrolling swipe carousel below `lg`, and the
- * editorial grid from `lg` up. Rendering the media once keeps a single `next/image`
- * per asset, so there is exactly one preload and one correct `sizes` hint.
+ * One DOM tree, two layouts: a snap-scrolling swipe carousel below `lg`, and a
+ * single-column gallery from `lg` up. Rendering the media once keeps a single
+ * `next/image` per asset, so there is exactly one preload and one correct `sizes` hint.
  */
 function Gallery({product}:{product:Product}){
   const media=useMemo<Media[]>(()=>[
@@ -15,11 +15,6 @@ function Gallery({product}:{product:Product}){
   ],[product])
   const trackRef=useRef<HTMLDivElement>(null)
   const[active,setActive]=useState(0)
-  // These coincide numerically but mean different things: the index of the final
-  // image, and how many images sit below the hero (i.e. fill the two-column rows).
-  const lastImage=product.images.length-1
-  const secondaryImages=product.images.length-1
-
   function onScroll(){
     const el=trackRef.current
     if(!el||!el.clientWidth)return
@@ -33,20 +28,14 @@ function Gallery({product}:{product:Product}){
 
   return <div className="relative">
     <div ref={trackRef} onScroll={onScroll} role="group" aria-label={`${product.name} gallery`}
-      className="hide-scrollbar flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain lg:grid lg:grid-cols-2 lg:gap-2 lg:overflow-visible">
-      {media.map((m,i)=>{
-        // Video always spans the row. A lone trailing image does too, so the desktop
-        // grid never leaves an orphaned empty half column.
-        const wide=i===0||m.type==='video'||(i===lastImage&&secondaryImages%2===1)
-        const tall=wide&&m.type==='image'
-        return <div key={`${m.src}-${i}`}
-          className={`relative aspect-[4/5] w-full shrink-0 snap-center overflow-hidden ${m.type==='video'?'bg-black lg:max-h-[720px]':'bg-cream'} ${wide?'lg:col-span-2':''} ${tall?'lg:aspect-[4/3]':''}`}>
-          {m.type==='image'
-            ?<Image src={m.src} alt={`${product.name} view ${i+1}`} fill priority={i===0} className="object-cover"
-              sizes={wide?'(min-width:1024px) 55vw, 100vw':'(min-width:1024px) 28vw, 100vw'}/>
-            :<video controls playsInline preload="metadata" poster={product.image} className="h-full w-full object-cover"><source src={m.src} type="video/mp4"/></video>}
-        </div>
-      })}
+      className="hide-scrollbar flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain lg:grid lg:grid-cols-1 lg:gap-2 lg:overflow-visible">
+      {media.map((m,i)=><div key={`${m.src}-${i}`}
+        className={`relative aspect-[4/5] w-full shrink-0 snap-center overflow-hidden ${m.type==='video'?'bg-black lg:max-h-[720px]':'bg-cream'}`}>
+        {m.type==='image'
+          ?<Image src={m.src} alt={`${product.name} view ${i+1}`} fill priority={i===0} className="object-cover"
+            sizes="(min-width:1024px) 58vw, 100vw"/>
+          :<video controls playsInline preload="metadata" poster={product.image} className="h-full w-full object-cover"><source src={m.src} type="video/mp4"/></video>}
+      </div>)}
     </div>
     {media.length>1&&<>
       <span className="pointer-events-none absolute right-3 top-3 rounded-full bg-black/45 px-2.5 py-1 text-[10px] font-medium tabular-nums text-white lg:hidden">{active+1}/{media.length}</span>
