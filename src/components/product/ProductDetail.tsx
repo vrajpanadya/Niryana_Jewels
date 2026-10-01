@@ -1,12 +1,13 @@
 'use client'
-import Image from'next/image';import{useEffect,useMemo,useRef,useState}from'react';import{Check,Heart,Minus,Plus,ShoppingBag,Star,Truck,ShieldCheck,RefreshCcw}from'lucide-react';import{Product,formatINR}from'@/data/products';import{useCartStore}from'@/store/cartStore';import{useWishlistStore}from'@/store/wishlistStore';import{FLY_TO_CART_MS,flyImageToCart,prefersReducedMotion}from'@/lib/flyToCart';
+import Image from'next/image';import{useEffect,useMemo,useRef,useState}from'react';import{Check,ChevronLeft,ChevronRight,Heart,Minus,Plus,ShoppingBag,Star,Truck,ShieldCheck,RefreshCcw}from'lucide-react';import{Product,formatINR}from'@/data/products';import{useCartStore}from'@/store/cartStore';import{useWishlistStore}from'@/store/wishlistStore';import{FLY_TO_CART_MS,flyImageToCart,prefersReducedMotion}from'@/lib/flyToCart';
 
 type Media={type:'image'|'video';src:string}
 
 /**
- * One DOM tree, two layouts: a snap-scrolling swipe carousel below `lg`, and the
- * editorial grid from `lg` up. Rendering the media once keeps a single `next/image`
- * per asset, so there is exactly one preload and one correct `sizes` hint.
+ * Exactly one layout at every breakpoint: a snap-scrolling swipe carousel that shows
+ * a single slide at a time on the phone *and* on the desktop, so the desktop gallery
+ * reads like the mobile experience (one image, counter, arrows, dots). Rendering the
+ * media once keeps a single `next/image` per asset — one preload, one `sizes` hint.
  */
 function Gallery({product}:{product:Product}){
   const media=useMemo<Media[]>(()=>[
@@ -15,47 +16,59 @@ function Gallery({product}:{product:Product}){
   ],[product])
   const trackRef=useRef<HTMLDivElement>(null)
   const[active,setActive]=useState(0)
-  // These coincide numerically but mean different things: the index of the final
-  // image, and how many images sit below the hero (i.e. fill the two-column rows).
-  const lastImage=product.images.length-1
-  const secondaryImages=product.images.length-1
+  const count=media.length
 
   function onScroll(){
     const el=trackRef.current
     if(!el||!el.clientWidth)return
-    setActive(Math.max(0,Math.min(media.length-1,Math.round(el.scrollLeft/el.clientWidth))))
+    setActive(Math.max(0,Math.min(count-1,Math.round(el.scrollLeft/el.clientWidth))))
   }
   function goTo(i:number){
     const el=trackRef.current
-    if(!el)return
-    el.scrollTo({left:i*el.clientWidth,behavior:'smooth'})
+    if(!el||!count)return
+    const index=Math.max(0,Math.min(count-1,i))
+    setActive(index) // respond immediately; the smooth scroll keeps the slide in sync
+    el.scrollTo({left:index*el.clientWidth,behavior:prefersReducedMotion()?'auto':'smooth'})
   }
+  // Only the slide on screen keeps playing: swiping away pauses that slide's video.
+  useEffect(()=>{
+    const el=trackRef.current
+    if(!el)return
+    el.querySelectorAll('video').forEach(video=>{
+      const slide=video.closest<HTMLElement>('[data-slide]')
+      if(!slide||Number(slide.dataset.slide)!==active)video.pause()
+    })
+  },[active])
 
-  return <div className="relative">
-    <div ref={trackRef} onScroll={onScroll} role="group" aria-label={`${product.name} gallery`}
-      className="hide-scrollbar flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain lg:grid lg:grid-cols-2 lg:gap-2 lg:overflow-visible">
-      {media.map((m,i)=>{
-        // Video always spans the row. A lone trailing image does too, so the desktop
-        // grid never leaves an orphaned empty half column.
-        const wide=i===0||m.type==='video'||(i===lastImage&&secondaryImages%2===1)
-        const tall=wide&&m.type==='image'
-        return <div key={`${m.src}-${i}`} data-active={active===i}
-          className={`relative aspect-[4/5] w-full shrink-0 snap-center overflow-hidden ${m.type==='video'?'bg-black lg:max-h-[720px]':'bg-cream'} ${wide?'lg:col-span-2':''} ${tall?'lg:aspect-[4/3]':''}`}>
+  return <div className="relative mx-auto w-full max-w-[600px]">
+    <div className="relative overflow-hidden bg-cream">
+      <div ref={trackRef} onScroll={onScroll} tabIndex={0} role="group" aria-roledescription="carousel"
+        aria-label={`${product.name} gallery`}
+        onKeyDown={e=>{
+          if(e.key==='ArrowLeft'){e.preventDefault();goTo(active-1)}
+          if(e.key==='ArrowRight'){e.preventDefault();goTo(active+1)}
+        }}
+        className="hide-scrollbar flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold">
+        {media.map((m,i)=><div key={`${m.src}-${i}`} data-slide={i} data-active={active===i}
+          className={`relative aspect-[4/5] w-full shrink-0 snap-center overflow-hidden ${m.type==='video'?'bg-black':'bg-cream'}`}>
           {m.type==='image'
-            ?<Image src={m.src} alt={`${product.name} view ${i+1}`} fill priority={i===0} className="object-cover"
-              sizes={wide?'(min-width:1024px) 55vw, 100vw':'(min-width:1024px) 28vw, 100vw'}/>
+            ?<Image src={m.src} alt={`${product.name} view ${i+1}`} fill priority={i===0} className="object-cover" sizes="(min-width:1024px) 600px, 100vw"/>
             :<video controls playsInline preload="metadata" poster={product.image} className="h-full w-full object-cover"><source src={m.src} type="video/mp4"/></video>}
-        </div>
-      })}
-    </div>
-    {media.length>1&&<>
-      <span className="pointer-events-none absolute right-3 top-3 rounded-full bg-black/45 px-2.5 py-1 text-[10px] font-medium tabular-nums text-white lg:hidden">{active+1}/{media.length}</span>
-      <div className="mt-3 flex items-center justify-center gap-2 lg:hidden">
-        {media.map((m,i)=><button key={`dot-${i}`} type="button" onClick={()=>goTo(i)} aria-current={active===i}
-          aria-label={m.type==='video'?'Show product video':`Show image ${i+1}`}
-          className={`h-1.5 rounded-full transition-all ${active===i?'w-6 bg-forest':'w-1.5 bg-black/20'}`}/>)}
+        </div>)}
       </div>
-    </>}
+      {count>1&&<>
+        <button type="button" onClick={()=>goTo(active-1)} aria-label="Previous image"
+          className="absolute left-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white/85 text-forest shadow-[0_6px_18px_rgba(23,59,44,.14)] backdrop-blur hover:bg-forest hover:text-white sm:left-4"><ChevronLeft size={19}/></button>
+        <button type="button" onClick={()=>goTo(active+1)} aria-label="Next image"
+          className="absolute right-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white/85 text-forest shadow-[0_6px_18px_rgba(23,59,44,.14)] backdrop-blur hover:bg-forest hover:text-white sm:right-4"><ChevronRight size={19}/></button>
+        <span className="pointer-events-none absolute right-3 top-3 rounded-full bg-black/45 px-2.5 py-1 text-[10px] font-medium tabular-nums text-white">{active+1}/{count}</span>
+      </>}
+    </div>
+    {count>1&&<div className="mt-3 flex items-center justify-center gap-2">
+      {media.map((m,i)=><button key={`dot-${i}`} type="button" onClick={()=>goTo(i)} aria-current={active===i}
+        aria-label={m.type==='video'?'Show product video':`Show image ${i+1}`}
+        className={`h-1.5 rounded-full transition-all ${active===i?'w-6 bg-forest':'w-1.5 bg-black/20'}`}/>)}
+    </div>}
   </div>
 }
 
